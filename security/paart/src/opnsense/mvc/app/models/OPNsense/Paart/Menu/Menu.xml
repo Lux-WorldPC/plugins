@@ -1,0 +1,46 @@
+<!--
+    Copyright (C) 2026 Lux-World PC SARL
+
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are met:
+
+    1. Redistributions of source code must retain the above copyright notice,
+       this list of conditions and the following disclaimer.
+
+    2. Redistributions in binary form must reproduce the above copyright
+       notice, this list of conditions and the following disclaimer in the
+       documentation and/or other materials provided with the distribution.
+
+    THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+    INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
+    AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+    AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+    OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+    POSSIBILITY OF SUCH DAMAGE.
+-->
+
+<menu>
+    <!--
+        M08: the plugin lives under VPN with a neutral name — "WireGuard"
+        never appears in the product name (trademark rule). Screens are
+        added here as they are delivered; the Dashboard leads, then the
+        screens in the order an admin works through them.
+    -->
+    <VPN>
+        <Paart order="30" cssClass="fa fa-id-card fa-fw" VisibleName="VPN Access">
+            <Dashboard order="5" url="/ui/paart/dashboard"/>
+            <Networks order="10" url="/ui/paart/networks"/>
+            <Users order="20" url="/ui/paart/users"/>
+            <Enrollment order="25" url="/ui/paart/enrollment"/>
+            <Devices order="30" url="/ui/paart/devices"/>
+            <Audit order="40" url="/ui/paart/audit"/>
+            <Settings order="90" url="/ui/paart/settings"/>
+        </Paart>
+    </VPN>
+</menu>

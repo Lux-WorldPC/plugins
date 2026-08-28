@@ -1,0 +1,515 @@
+<!--
+    Copyright (C) 2026 Lux-World PC SARL
+
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are met:
+
+    1. Redistributions of source code must retain the above copyright notice,
+       this list of conditions and the following disclaimer.
+
+    2. Redistributions in binary form must reproduce the above copyright
+       notice, this list of conditions and the following disclaimer in the
+       documentation and/or other materials provided with the distribution.
+
+    THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+    INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
+    AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+    AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+    OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+    POSSIBILITY OF SUCH DAMAGE.
+-->
+
+<!DOCTYPE html>
+<!--
+  Enrollment portal page (M15) — rendered by Enroll\Portal, which replaces the
+  PAART placeholders (double braces): the escaped site label, the JSON configuration
+  blob, and the two inlined scripts (X25519 fallback, the core's QR library).
+  Everything else is static. No cookie, no storage, no external resource: the
+  page runs on an isolated firewall and behind an ACL that admits nothing but
+  the enrollment paths. The private key exists only in this page's memory
+  (inside the assembled .conf text) and is wiped when the user clears the
+  page with the last button, or leaves it (pagehide) — not on download, so
+  the file can be fetched again and the QR stays scannable until then.
+
+  The fragment carries the token (#token=...) and, for a rekey link, a
+  device-name hint (&name=...) that the page shows non-editable — see
+  Enroll\Portal for why that is a hint and not a server answer.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'self'; form-action 'none'; base-uri 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<title>VPN access — {{PAART_SITE}}</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         background: #f4f5f7; color: #1d2229; }
+  main { max-width: 640px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  h2 { font-size: 1.1rem; margin: 0 0 12px; }
+  .site { color: #5a6270; margin: 0 0 24px; }
+  .card { background: #fff; border: 1px solid #dde1e6; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+  .step { display: flex; gap: 12px; align-items: baseline; }
+  .step .n { flex: none; width: 28px; height: 28px; border-radius: 50%; background: #1d2229; color: #fff;
+             text-align: center; line-height: 28px; font-weight: 600; font-size: 0.9rem; }
+  label { display: block; font-weight: 600; margin: 12px 0 4px; }
+  input[type=text], select, textarea { width: 100%; font: inherit; padding: 8px 10px; border: 1px solid #b9c0c8;
+                                      border-radius: 6px; background: #fff; color: inherit; }
+  textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.85rem; }
+  input[readonly] { background: #eef0f3; color: #5a6270; }
+  button { font: inherit; font-weight: 600; padding: 10px 18px; border-radius: 6px; border: 1px solid #1d2229;
+           background: #1d2229; color: #fff; cursor: pointer; margin-top: 16px; }
+  button.secondary { background: #fff; color: #1d2229; }
+  button[disabled] { opacity: 0.5; cursor: default; }
+  .hint { color: #5a6270; font-size: 0.9rem; margin: 6px 0 0; }
+  .why { border-left: 3px solid #1d2229; padding: 4px 12px; margin: 16px 0 0; font-size: 0.95rem; }
+  .error { background: #fdecec; border: 1px solid #f2b8b8; color: #7a1f1f; border-radius: 6px; padding: 12px; margin-top: 12px; }
+  .qr { text-align: center; margin: 16px 0; }
+  .qr canvas { background: #fff; padding: 12px; border: 1px solid #dde1e6; border-radius: 8px; max-width: 100%; }
+  details { margin-top: 12px; }
+  summary { cursor: pointer; color: #5a6270; }
+  ol.instructions { padding-left: 20px; }
+  .hidden { display: none !important; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.9em; }
+  a { color: #0b57d0; }
+  footer { color: #8a919c; font-size: 0.8rem; margin-top: 24px; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #121417; color: #e6e8eb; }
+    .site, .hint, summary, footer { color: #9aa3ad; }
+    .card { background: #1b1f24; border-color: #2c333b; }
+    input[type=text], select, textarea { background: #121417; border-color: #3a424b; }
+    input[readonly] { background: #1b1f24; color: #9aa3ad; }
+    .step .n, button { background: #e6e8eb; color: #121417; border-color: #e6e8eb; }
+    button.secondary { background: #1b1f24; color: #e6e8eb; }
+    .why { border-color: #e6e8eb; }
+    .error { background: #3a1d1d; border-color: #6b2b2b; color: #f3c2c2; }
+    .qr canvas { border-color: #2c333b; }
+    a { color: #8ab4f8; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>VPN access</h1>
+  <p class="site" id="site-label">{{PAART_SITE}}</p>
+
+  <div class="card hidden" id="no-token">
+    <h2>This link is incomplete</h2>
+    <p>The enrollment link you opened carries no token. Open the exact link or QR code you received, or ask your administrator for a new one.</p>
+  </div>
+
+  <div class="card hidden" id="no-js-crypto">
+    <h2>Your browser cannot create keys</h2>
+    <p>Neither this browser's cryptography nor the built-in fallback is available. Use another browser, or the "I generate my own key" option below.</p>
+  </div>
+
+  <section class="card" id="step-1">
+    <div class="step"><span class="n">1</span><h2 id="step-1-title">Name this device</h2></div>
+    <form id="form" autocomplete="off">
+      <label for="device-name">Device name</label>
+      <input type="text" id="device-name" placeholder="e.g. Office laptop" required>
+      <p class="hint" id="name-hint">Shown to your administrator, so they know which device this is.</p>
+      <p class="hint hidden" id="rekey-hint">This link renews the key of an existing device. Its name stays as your administrator recorded it; the new configuration keeps the same address.</p>
+      <label for="platform">Platform</label>
+      <select id="platform"></select>
+      <details id="manual-details">
+        <summary>I generate my own key</summary>
+        <p class="hint">Create a key pair with your WireGuard client (for example <code>wg genkey | tee private.key | wg pubkey</code>) and paste the <strong>public</strong> key here. The configuration you download will have a <code>PrivateKey</code> line to fill in yourself.</p>
+        <label for="own-public-key">Your public key</label>
+        <input type="text" id="own-public-key" placeholder="44 characters, ends with =" spellcheck="false">
+      </details>
+      <button type="submit" id="submit">Create my VPN configuration</button>
+      <div class="error hidden" id="error" role="alert"></div>
+    </form>
+    <p class="why"><strong>Your private key never leaves this device.</strong> It is created here, in your browser, and only its public half is sent to the server. Nobody — not even your administrator — can read or reconstruct it.</p>
+  </section>
+
+  <section class="card hidden" id="step-2">
+    <div class="step"><span class="n">2</span><h2>Install the configuration</h2></div>
+    <p id="ready-text"></p>
+    <button type="button" id="download">Download the configuration file</button>
+    <p class="hint" id="download-name"></p>
+    <div class="qr"><canvas id="qr" width="0" height="0"></canvas></div>
+    <p class="hint">On a phone, scan this code with the WireGuard app instead of downloading.</p>
+    <div id="manual-note" class="hidden">
+      <p class="why">You generated the key yourself: open the downloaded file and replace <code>REPLACE_WITH_YOUR_PRIVATE_KEY</code> with your private key before importing it.</p>
+    </div>
+  </section>
+
+  <section class="card hidden" id="step-3">
+    <div class="step"><span class="n">3</span><h2>Connect</h2></div>
+    <ol class="instructions" id="instructions"></ol>
+    <p class="hint">Official clients for every platform: <a href="https://www.wireguard.com/install/" rel="noopener noreferrer" target="_blank">wireguard.com/install</a>.</p>
+    <button type="button" class="secondary" id="done">I have installed it — clear this page</button>
+  </section>
+
+  <footer>Compatible with the WireGuard® protocol. "WireGuard" is a registered trademark of Jason A. Donenfeld.</footer>
+</main>
+
+<script id="paart-config" type="application/json">{{PAART_CONFIG}}</script>
+<script>
+{{PAART_X25519_JS}}
+</script>
+<script>
+{{PAART_QRCODE_JS}}
+</script>
+<script>
+(function () {
+    'use strict';
+
+    var config = JSON.parse(document.getElementById('paart-config').textContent);
+    var PLATFORM_LABELS = {
+        ios: 'iPhone (iOS)', ipados: 'iPad (iPadOS)', macos: 'Mac (macOS)', windows: 'Windows',
+        linux: 'Linux', android: 'Android', other: 'Other'
+    };
+    var INSTRUCTIONS = {
+        windows: ['Install WireGuard for Windows from the link below.',
+                  'Open it, choose "Add Tunnel" → "Import tunnel(s) from file", and pick the downloaded file.',
+                  'Click "Activate". The tunnel stays available in the tray icon.'],
+        macos: ['Install the WireGuard app from the Mac App Store.',
+                'Choose "Import tunnel(s) from file" and pick the downloaded file.',
+                'Click "Activate".'],
+        ios: ['Install the WireGuard app from the App Store.',
+              'Tap "+" → "Create from QR code" and scan the code above (or "Create from file" with the downloaded file).',
+              'Turn the tunnel on.'],
+        ipados: ['Install the WireGuard app from the App Store.',
+                 'Tap "+" → "Create from QR code" and scan the code above (or "Create from file" with the downloaded file).',
+                 'Turn the tunnel on.'],
+        android: ['Install the WireGuard app from Google Play or F-Droid.',
+                  'Tap "+" → "Scan from QR code" and scan the code above (or "Import from file").',
+                  'Turn the tunnel on.'],
+        linux: ['Install the wireguard tools from your distribution (package "wireguard" or "wireguard-tools").',
+                'Copy the file to /etc/wireguard/ (the file name becomes the interface name).',
+                'Run "sudo wg-quick up <name>" — or import it in your desktop network manager.'],
+        other: ['Install a WireGuard client for your platform from the link below.',
+                'Import the downloaded configuration file, or scan the code above.',
+                'Activate the tunnel.']
+    };
+    var ERROR_TEXT = {
+        ENROLLMENT_REJECTED: 'This link is not valid any more (expired, already used, or revoked). Nothing was created. Ask your administrator for a new one.',
+        // "ten minutes" = EnrollmentService::RATE_LIMIT_WINDOW_S (600 s); keep both in step.
+        RATE_LIMITED: 'Too many attempts from your network. Wait ten minutes, then open the link again.',
+        PROVISIONING_UNAVAILABLE: 'The VPN service is temporarily unavailable. Nothing was changed; try again in a minute with the same link.',
+        PUBLIC_KEY_IN_USE: 'This key is already known to the server. Try again: a fresh key pair is generated on every attempt.',
+        DEVICE_LIMIT_REACHED: 'You already have the maximum number of devices. Ask your administrator to remove one first.',
+        POOL_EXHAUSTED: 'No address is left on this network. Ask your administrator.',
+        PAYLOAD_TOO_LARGE: 'The request was refused as too large. Shorten the device name and try again.'
+    };
+
+    var el = function (id) { return document.getElementById(id); };
+    var state = { token: null, rekeyName: null, privateKey: null, conf: null, blobUrl: null, fileName: null, manual: false };
+
+    // ---------------------------------------------------------------- setup
+
+    // One field of the fragment. Accepted shapes: "#token=…", "#?token=…"
+    // (some QR readers and mail clients insert the "?"), and any position
+    // after an "&" — so "#token=…&name=…" reads both. Values are
+    // percent-encoded by Portal::link().
+    function readFragment(field) {
+        var hash = window.location.hash || '';
+        var m = new RegExp('(?:^#|&)' + field + '=([^&]+)').exec(hash.replace(/^#\??/, '#'));
+        if (!m) { return null; }
+        try { return decodeURIComponent(m[1]); } catch (e) { return null; }
+    }
+
+    function fillPlatforms() {
+        var select = el('platform');
+        config.platforms.forEach(function (p) {
+            var option = document.createElement('option');
+            option.value = p;
+            option.textContent = PLATFORM_LABELS[p] || p;
+            select.appendChild(option);
+        });
+        var guess = guessPlatform();
+        if (guess && config.platforms.indexOf(guess) !== -1) { select.value = guess; }
+    }
+
+    function guessPlatform() {
+        var ua = navigator.userAgent || '';
+        if (/iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) { return 'ipados'; }
+        if (/iPhone|iPod/.test(ua)) { return 'ios'; }
+        if (/Android/.test(ua)) { return 'android'; }
+        if (/Windows/.test(ua)) { return 'windows'; }
+        if (/Macintosh|Mac OS X/.test(ua)) { return 'macos'; }
+        if (/Linux|X11/.test(ua)) { return 'linux'; }
+        return null;
+    }
+
+    // ------------------------------------------------------------ key pair
+
+    function toBase64(bytes) {
+        var s = '';
+        for (var i = 0; i < bytes.length; i++) { s += String.fromCharCode(bytes[i]); }
+        return btoa(s);
+    }
+
+    function wipe(bytes) { if (bytes && bytes.fill) { bytes.fill(0); } }
+
+    // WebCrypto X25519 first (the browser keeps the secret in its own memory
+    // until export), else the inlined pure-JS ladder over getRandomValues.
+    function generateKeyPair() {
+        var subtle = window.crypto && window.crypto.subtle;
+        if (subtle && subtle.generateKey) {
+            return subtle.generateKey({ name: 'X25519' }, true, ['deriveBits']).then(function (pair) {
+                return Promise.all([subtle.exportKey('pkcs8', pair.privateKey), subtle.exportKey('raw', pair.publicKey)]);
+            }).then(function (exported) {
+                var pkcs8 = new Uint8Array(exported[0]);
+                var secret = pkcs8.slice(pkcs8.length - 32); // RFC 8410: the raw scalar ends the PKCS#8 blob
+                wipe(pkcs8);
+                var pub = new Uint8Array(exported[1]);
+                if (secret.length !== 32 || pub.length !== 32) { throw new Error('unexpected key length'); }
+                return { secret: secret, pub: pub };
+            }).catch(function () { return generateKeyPairFallback(); });
+        }
+        return Promise.resolve().then(generateKeyPairFallback);
+    }
+
+    function generateKeyPairFallback() {
+        if (typeof PaartX25519 === 'undefined' || !window.crypto || !window.crypto.getRandomValues) {
+            throw new Error('no-crypto');
+        }
+        var secret = new Uint8Array(32);
+        window.crypto.getRandomValues(secret);
+        secret[0] &= 248; secret[31] &= 127; secret[31] |= 64; // RFC 7748 clamping
+        return { secret: secret, pub: PaartX25519.publicKey(secret) };
+    }
+
+    // A WireGuard public key is 32 bytes in base64: 43 characters plus one
+    // "=" of padding, and it must decode to exactly 32 bytes.
+    function looksLikePublicKey(value) {
+        if (!/^[A-Za-z0-9+/]{43}=$/.test(value)) { return false; }
+        try { return atob(value).length === 32; } catch (e) { return false; }
+    }
+
+    // -------------------------------------------------------------- submit
+
+    // The submission lives one path element below the page, whichever
+    // path the page was reached by: "/enroll/" publicly (M09 rewrite) or
+    // "/api/paart/enroll/portal" on the web GUI — stripping trailing
+    // slashes makes both yield ".../submit".
+    function submitUrl() {
+        var path = window.location.pathname.replace(/\/+$/, '');
+        return path + '/' + config.submit_step;
+    }
+
+    function showError(text) {
+        var box = el('error');
+        box.textContent = text;
+        box.classList.remove('hidden');
+    }
+
+    function onSubmit(event) {
+        event.preventDefault();
+        el('error').classList.add('hidden');
+        var name = el('device-name').value.trim();
+        if (name === '') { showError('Give this device a name.'); return; }
+        if (name.length > config.device_name_max_length) {
+            showError('The device name is limited to ' + config.device_name_max_length + ' characters.');
+            return;
+        }
+        var ownKey = el('own-public-key').value.trim();
+        state.manual = ownKey !== '';
+        if (state.manual && !looksLikePublicKey(ownKey)) {
+            showError('That does not look like a public key (44 base64 characters). Paste the public key, not the private one.');
+            return;
+        }
+        el('submit').disabled = true;
+
+        var keys = state.manual
+            ? Promise.resolve({ secret: null, pub: ownKey })
+            : generateKeyPair().then(function (pair) {
+                return { secret: pair.secret, pub: toBase64(pair.pub) };
+            });
+
+        keys.then(function (pair) {
+            state.privateKey = pair.secret ? toBase64(pair.secret) : null;
+            wipe(pair.secret);
+            return fetch(submitUrl(), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'omit',
+                cache: 'no-store',
+                body: JSON.stringify({
+                    token: state.token,
+                    public_key: pair.pub,
+                    device_name: name,
+                    platform: el('platform').value
+                })
+            });
+        }).then(function (response) {
+            return response.json().then(function (body) { return { status: response.status, body: body }; });
+        }).then(function (reply) {
+            if (reply.status !== 200 || !reply.body || !reply.body.bundle) {
+                var code = reply.body && reply.body.error ? reply.body.error.code : 'INTERNAL';
+                var text = ERROR_TEXT[code] || (reply.body && reply.body.error && reply.body.error.message) ||
+                    'Something went wrong; whether the device was created is unknown. Ask your administrator.';
+                throw new Error(text);
+            }
+            showResult(reply.body.bundle, name);
+        }).catch(function (err) {
+            state.privateKey = null;
+            var message = err && err.message === 'no-crypto'
+                ? 'This browser cannot create keys. Use another browser, or the "I generate my own key" option.'
+                : (err && err.message) || 'The server could not be reached. Check your connection and try again.';
+            showError(message);
+            el('submit').disabled = false;
+        });
+    }
+
+    // --------------------------------------------------------------- result
+
+    // wg-quick file from the bundle: the classic client's view of what the app
+    // receives (M17 keeps the same derivation). AllowedIPs = the networks the
+    // admin switched on by default; none on → every declared network; none
+    // declared → everything through the tunnel. ASCII only (the QR encoder
+    // is byte-oriented), no comments: what is scanned is what is downloaded.
+    function buildConf(bundle, privateKey) {
+        var t = bundle.tunnel || {};
+        var subnets = (bundle.subnets || []).filter(function (s) { return s.default_on; });
+        if (subnets.length === 0) { subnets = bundle.subnets || []; }
+        var allowed = subnets.map(function (s) { return s.cidr; });
+        if (allowed.length === 0) { allowed = ['0.0.0.0/0', '::/0']; }
+        var dns = (bundle.dns && bundle.dns.servers) || [];
+        var domains = (bundle.dns && bundle.dns.match_domains) || [];
+        var lines = ['[Interface]', 'PrivateKey = ' + (privateKey || 'REPLACE_WITH_YOUR_PRIVATE_KEY'), 'Address = ' + t.address];
+        if (dns.length > 0) { lines.push('DNS = ' + dns.concat(domains).join(', ')); }
+        if (t.mtu) { lines.push('MTU = ' + t.mtu); }
+        lines.push('', '[Peer]', 'PublicKey = ' + t.server_public_key, 'Endpoint = ' + t.endpoint,
+            'AllowedIPs = ' + allowed.join(', '));
+        if (t.persistent_keepalive) { lines.push('PersistentKeepalive = ' + t.persistent_keepalive); }
+        return lines.join('\n') + '\n';
+    }
+
+    // Interface name = file name for wg-quick and the Windows client: at
+    // most 15 characters (the kernel's IFNAMSIZ - 1, which the Windows
+    // client enforces too) from the set both accept.
+    function fileNameFor(bundle) {
+        var label = (bundle.network && bundle.network.label) || 'vpn';
+        var name = label.normalize ? label.normalize('NFKD') : label;
+        name = name.replace(/[^A-Za-z0-9_=+.-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 15);
+        return (name || 'vpn') + '.conf';
+    }
+
+    function drawQr(text) {
+        var canvas = el('qr');
+        var qr = new QRCode(-1, QRErrorCorrectLevel.M);
+        qr.addData(text);
+        qr.make();
+        var count = qr.getModuleCount();
+        // Target ~320 px a side (scannable from a phone at arm's length,
+        // same size as the admin screens), never below 2 px per module.
+        var module = Math.max(2, Math.floor(320 / count));
+        var size = count * module;
+        canvas.width = size;
+        canvas.height = size;
+        var ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, size, size);
+        ctx.fillStyle = '#000';
+        for (var r = 0; r < count; r++) {
+            for (var c = 0; c < count; c++) {
+                if (qr.isDark(r, c)) { ctx.fillRect(c * module, r * module, module, module); }
+            }
+        }
+    }
+
+    function showResult(bundle, deviceName) {
+        state.conf = buildConf(bundle, state.privateKey);
+        state.privateKey = null; // it now lives in the file text only
+        state.fileName = fileNameFor(bundle);
+        var network = (bundle.network && bundle.network.label) || '';
+        el('ready-text').textContent = (state.rekeyName !== null ? 'The new configuration for "' : 'The configuration for "') +
+            deviceName + '" on ' + network + ' is ready. It is only available on this page, now.';
+        el('download-name').textContent = 'File: ' + state.fileName;
+        el('manual-note').classList.toggle('hidden', !state.manual);
+        try { drawQr(state.conf); } catch (e) { el('qr').parentNode.classList.add('hidden'); }
+        var list = el('instructions');
+        list.textContent = '';
+        (INSTRUCTIONS[el('platform').value] || INSTRUCTIONS.other).forEach(function (step) {
+            var item = document.createElement('li');
+            item.textContent = step;
+            list.appendChild(item);
+        });
+        el('step-1').classList.add('hidden');
+        el('step-2').classList.remove('hidden');
+        el('step-3').classList.remove('hidden');
+        window.scrollTo(0, 0);
+    }
+
+    function download() {
+        if (state.conf === null) { return; }
+        if (state.blobUrl) { URL.revokeObjectURL(state.blobUrl); }
+        state.blobUrl = URL.createObjectURL(new Blob([state.conf], { type: 'application/octet-stream' }));
+        var a = document.createElement('a');
+        a.href = state.blobUrl;
+        a.download = state.fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+
+    // Forget everything the page holds: the file text (with the private key),
+    // the QR, the blob. Also run when the page is left.
+    function clearAll() {
+        state.conf = null;
+        state.privateKey = null;
+        state.token = null;
+        if (state.blobUrl) { URL.revokeObjectURL(state.blobUrl); state.blobUrl = null; }
+        var canvas = el('qr');
+        canvas.width = 0;
+        canvas.height = 0;
+    }
+
+    function done() {
+        clearAll();
+        el('step-2').classList.add('hidden');
+        el('step-3').classList.add('hidden');
+        el('no-token').querySelector('h2').textContent = 'All done';
+        el('no-token').querySelector('p').textContent = 'This page no longer holds anything. You can close it.';
+        el('no-token').classList.remove('hidden');
+        if (window.history && window.history.replaceState) {
+            window.history.replaceState(null, '', window.location.pathname);
+        }
+    }
+
+    // ----------------------------------------------------------------- boot
+
+    state.token = readFragment('token');
+    state.rekeyName = readFragment('name');
+    fillPlatforms();
+    if (state.token === null) {
+        el('no-token').classList.remove('hidden');
+        el('step-1').classList.add('hidden');
+    } else if (state.rekeyName !== null) {
+        // Rekey link: the device already exists, its name is not the
+        // user's to choose (the server keeps its own anyway).
+        el('step-1-title').textContent = 'Renew the key of this device';
+        el('device-name').value = state.rekeyName;
+        el('device-name').readOnly = true;
+        el('name-hint').classList.add('hidden');
+        el('rekey-hint').classList.remove('hidden');
+        el('submit').textContent = 'Create my new VPN configuration';
+    }
+    var hasCrypto = (window.crypto && window.crypto.subtle) || (typeof PaartX25519 !== 'undefined' && window.crypto && window.crypto.getRandomValues);
+    if (!hasCrypto) {
+        el('no-js-crypto').classList.remove('hidden');
+        el('manual-details').open = true;
+    }
+    el('form').addEventListener('submit', onSubmit);
+    el('download').addEventListener('click', download);
+    el('done').addEventListener('click', done);
+    window.addEventListener('pagehide', clearAll);
+})();
+</script>
+</body>
+</html>

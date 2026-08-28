@@ -1,0 +1,16 @@
+Paart turns the WireGuard instances a firewall already runs into managed
+user access: named identities, one key per device, immediate revocation
+and an audit journal.
+
+Administrators think in people and access rather than configuration
+files. Private keys are generated on the devices and never travel, so the
+firewall never holds one. The plugin attaches to instances the
+administrator declares and touches nothing else: no instance it was not
+given, no address outside the declared ranges, and never a peer removed
+without an explicit intention.
+
+Devices enrol by scanning a QR code, either from the Apple application or
+from the built-in web portal for other platforms. Nothing depends on a
+publisher's server, at any point.
+
+WWW: https://paart.app

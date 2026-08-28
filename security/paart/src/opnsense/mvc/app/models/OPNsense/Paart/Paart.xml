@@ -1,0 +1,225 @@
+<!--
+    Copyright (C) 2026 Lux-World PC SARL
+
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are met:
+
+    1. Redistributions of source code must retain the above copyright notice,
+       this list of conditions and the following disclaimer.
+
+    2. Redistributions in binary form must reproduce the above copyright
+       notice, this list of conditions and the following disclaimer in the
+       documentation and/or other materials provided with the distribution.
+
+    THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+    INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
+    AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+    AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+    OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+    POSSIBILITY OF SUCH DAMAGE.
+-->
+
+<model>
+    <!--
+        Plugin model (M08): everything the M02 separation rule assigns to
+        config.xml — the declared WireGuard instances (authoritative, the
+        SQLite `instances` table mirrors them under ULIDs, Q13) and the
+        global settings. Deep declaration rules (single /24, pool bounds,
+        range overlap) are enforced by Domain\Instances at controller
+        time; validation here only rejects malformed input early — masks,
+        plus wgInstanceRef's referential check (ModelRelationField: the
+        uuid must name an existing WireGuard instance).
+    -->
+    <mount>//OPNsense/paart</mount>
+    <version>0.1.0</version>
+    <description>VPN access management for existing WireGuard instances</description>
+    <items>
+        <settings>
+            <!-- M05: rotation grace TTL; expiry alerts, never cuts access. -->
+            <rotationGraceDays type="IntegerField">
+                <Default>30</Default>
+                <MinimumValue>1</MinimumValue>
+                <MaximumValue>3650</MaximumValue>
+                <Required>Y</Required>
+                <ValidationMessage>Rotation grace must be between 1 and 3650 days.</ValidationMessage>
+            </rotationGraceDays>
+            <!-- M03: released addresses stay unallocatable this long. -->
+            <ipQuarantineDays type="IntegerField">
+                <Default>90</Default>
+                <MinimumValue>0</MinimumValue>
+                <MaximumValue>3650</MaximumValue>
+                <Required>Y</Required>
+                <ValidationMessage>IP quarantine must be between 0 and 3650 days.</ValidationMessage>
+            </ipQuarantineDays>
+            <!-- M03: global non-revoked device cap per user; 0 = unlimited. -->
+            <maxDevicesPerUser type="IntegerField">
+                <Default>0</Default>
+                <MinimumValue>0</MinimumValue>
+                <MaximumValue>1000</MaximumValue>
+                <Required>Y</Required>
+                <ValidationMessage>Device limit must be between 0 (unlimited) and 1000.</ValidationMessage>
+            </maxDevicesPerUser>
+            <!-- M07 purge horizon: entries older than this are dropped by
+                 AuditTrail::purgeExpired(); the Audit screen warns below
+                 12 months (spec M07). -->
+            <auditRetentionMonths type="IntegerField">
+                <Default>24</Default>
+                <MinimumValue>1</MinimumValue>
+                <MaximumValue>120</MaximumValue>
+                <Required>Y</Required>
+                <ValidationMessage>Audit retention must be between 1 and 120 months.</ValidationMessage>
+            </auditRetentionMonths>
+            <!-- M04 bundles: site.label shown by the client apps; empty
+                 falls back to the firewall hostname (Paart::libSettings). -->
+            <siteLabel type="TextField">
+                <Mask>/^[^\r\n]{1,64}$/u</Mask>
+                <ValidationMessage>At most 64 characters on a single line.</ValidationMessage>
+            </siteLabel>
+            <!-- ADR 0003/0004: SPKI SHA-256 pin (base64) of the certificate
+                 the web GUI presents on site.instance_url, published as
+                 bundle site.pin_sha256. A DIFFERENT certificate from the
+                 public enrollment endpoint's (enrollPinSha256 below): the
+                 in-tunnel control plane is the GUI itself, reached at a
+                 tunnel address, so its certificate is normally not publicly
+                 verifiable. Empty publishes no pin, and a client then has
+                 nothing to trust the control plane with (M12 refuses rather
+                 than skipping validation). -->
+            <controlPlanePinSha256 type="TextField">
+                <Mask>/^[A-Za-z0-9+\/]{43}=$/u</Mask>
+                <ValidationMessage>The pin must be 44 base64 characters (SPKI SHA-256).</ValidationMessage>
+            </controlPlanePinSha256>
+            <!-- ADR 0024 (D36): the site key, stored here and published as
+                 bundle site.site_key. An OPAQUE string on this side. The
+                 mask is a LENGTH, deliberately: a pattern that recognised
+                 the token's three segments would be this plugin starting to
+                 read a licence, which forbidden rule #10 refuses even when
+                 nothing acts on the result (D38). A string goes in, the
+                 same string comes out; the client verifies it alone. -->
+            <siteKey type="TextField">
+                <Mask>/^[^\r\n]{0,512}$/u</Mask>
+                <ValidationMessage>At most 512 characters on a single line.</ValidationMessage>
+            </siteKey>
+            <!-- M01 enroll links: public host[:port]; M09 owns the exposure. -->
+            <enrollHost type="TextField">
+                <Mask>/^[a-zA-Z0-9.\-]+(:[0-9]{1,5})?$/u</Mask>
+                <ValidationMessage>Enter a hostname or IP, optionally with :port.</ValidationMessage>
+            </enrollHost>
+            <!-- ADR 0004: SPKI SHA-256 pin (base64) for non-public CAs. -->
+            <enrollPinSha256 type="TextField">
+                <Mask>/^[A-Za-z0-9+\/]{43}=$/u</Mask>
+                <ValidationMessage>The pin must be 44 base64 characters (SPKI SHA-256).</ValidationMessage>
+            </enrollPinSha256>
+            <!-- M09 exposure: the HAProxy frontend the plugin generates on
+                 request (Settings > Apply). The bind is address:port; the
+                 certificate is a System > Trust refid the frontend presents.
+                 Both are inert until the exposure is applied. -->
+            <exposureBind type="TextField">
+                <Default>0.0.0.0:443</Default>
+                <Mask>/^(\*|[0-9A-Za-z.\-]+|\[[0-9A-Fa-f:.]+\])?:[0-9]{1,5}$/u</Mask>
+                <ValidationMessage>Enter address:port (e.g. 0.0.0.0:443 or [::]:443).</ValidationMessage>
+            </exposureBind>
+            <exposureCertificate type="CertificateField">
+                <Required>N</Required>
+            </exposureCertificate>
+            <!-- M06 gateway: the local os-wireguard API, the campaign-validated path.
+                 M09 reuses the same credentials toward os-haproxy. -->
+            <wgApiUrl type="TextField">
+                <Default>https://127.0.0.1</Default>
+                <Mask>/^https:\/\/[a-zA-Z0-9.\-\[\]]+(:[0-9]{1,5})?$/u</Mask>
+                <Required>Y</Required>
+                <ValidationMessage>Enter an https:// URL, optionally with :port.</ValidationMessage>
+            </wgApiUrl>
+            <wgApiKey type="TextField">
+                <Mask>/^[^\s]{0,256}$/u</Mask>
+                <ValidationMessage>API keys contain no whitespace.</ValidationMessage>
+            </wgApiKey>
+            <wgApiSecret type="TextField">
+                <Mask>/^[^\s]{0,256}$/u</Mask>
+                <ValidationMessage>API secrets contain no whitespace.</ValidationMessage>
+            </wgApiSecret>
+            <!-- Off by default: the loopback call presents the firewall's own cert. -->
+            <wgApiVerifyTls type="BooleanField">
+                <Default>0</Default>
+                <Required>Y</Required>
+            </wgApiVerifyTls>
+        </settings>
+        <networks>
+            <network type="ArrayField">
+                <enabled type="BooleanField">
+                    <Default>1</Default>
+                    <Required>Y</Required>
+                </enabled>
+                <!-- os-wireguard server uuid (V3: the instance reference IS
+                     the uuid). ModelRelationField, not TextField: the dialog
+                     dropdown is fed by the framework from this relation
+                     (setFormData() empties every <select> and refills it from
+                     the field's option map — a plain string leaves it empty),
+                     and validation guarantees the uuid references an existing
+                     instance. The stored value stays the bare uuid. -->
+                <wgInstanceRef type="ModelRelationField">
+                    <Model>
+                        <servers>
+                            <source>OPNsense.Wireguard.Server</source>
+                            <items>servers.server</items>
+                            <display>name</display>
+                        </servers>
+                    </Model>
+                    <Required>Y</Required>
+                    <ValidationMessage>Select a WireGuard instance.</ValidationMessage>
+                </wgInstanceRef>
+                <label type="TextField">
+                    <Required>Y</Required>
+                    <Mask>/^[^\r\n]{1,64}$/u</Mask>
+                    <ValidationMessage>A label of 1 to 64 characters is required.</ValidationMessage>
+                </label>
+                <!-- host:port published in bundles (tunnel.endpoint, M01). -->
+                <endpoint type="TextField">
+                    <Required>Y</Required>
+                    <Mask>/^[a-zA-Z0-9.\-\[\]]+:[0-9]{1,5}$/u</Mask>
+                    <ValidationMessage>Enter host:port (e.g. vpn.example.com:51820).</ValidationMessage>
+                </endpoint>
+                <!-- Managed range; must sit in a single /24 (ADR 0005, deep-checked). -->
+                <ipRangeCidr type="TextField">
+                    <Required>Y</Required>
+                    <Mask>/^[0-9]{1,3}(\.[0-9]{1,3}){3}\/[0-9]{1,2}$/u</Mask>
+                    <ValidationMessage>Enter an IPv4 network in CIDR form (e.g. 10.7.0.0/24).</ValidationMessage>
+                </ipRangeCidr>
+                <poolStartOctet type="IntegerField">
+                    <Required>Y</Required>
+                    <MinimumValue>1</MinimumValue>
+                    <MaximumValue>254</MaximumValue>
+                    <ValidationMessage>Pool start must be a host octet (1-254).</ValidationMessage>
+                </poolStartOctet>
+                <poolEndOctet type="IntegerField">
+                    <Required>Y</Required>
+                    <MinimumValue>1</MinimumValue>
+                    <MaximumValue>254</MaximumValue>
+                    <ValidationMessage>Pool end must be a host octet (1-254).</ValidationMessage>
+                </poolEndOctet>
+                <!-- Comma-separated; split and pushed via the bundle (M01). -->
+                <dnsServers type="TextField">
+                    <Mask>/^[0-9a-fA-F.:, ]{0,255}$/u</Mask>
+                    <ValidationMessage>Comma-separated IP addresses.</ValidationMessage>
+                </dnsServers>
+                <matchDomains type="TextField">
+                    <Mask>/^[a-zA-Z0-9.\-, ]{0,255}$/u</Mask>
+                    <ValidationMessage>Comma-separated DNS domains.</ValidationMessage>
+                </matchDomains>
+                <allowFullTunnel type="BooleanField">
+                    <Default>0</Default>
+                    <Required>Y</Required>
+                </allowFullTunnel>
+                <allowSubnetToggle type="BooleanField">
+                    <Default>0</Default>
+                    <Required>Y</Required>
+                </allowSubnetToggle>
+            </network>
+        </networks>
+    </items>
+</model>

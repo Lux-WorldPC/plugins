@@ -1,0 +1,151 @@
+<!--
+    Copyright (C) 2026 Lux-World PC SARL
+
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are met:
+
+    1. Redistributions of source code must retain the above copyright notice,
+       this list of conditions and the following disclaimer.
+
+    2. Redistributions in binary form must reproduce the above copyright
+       notice, this list of conditions and the following disclaimer in the
+       documentation and/or other materials provided with the distribution.
+
+    THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+    INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
+    AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+    AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+    OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+    POSSIBILITY OF SUCH DAMAGE.
+-->
+
+<!--
+    Global plugin settings (M08 Settings screen). Field ids address the
+    Paart model directly ("paart.settings.<field>"); the library reads them
+    flattened through Paart::libSettings(). Grouped by header field:
+    access lifecycle, site identity (bundle site.label), enrollment links,
+    the public exposure inputs (M09: bind and certificate of the generated
+    HAProxy frontend — the Apply/Remove/Verify actions live in the view,
+    not in this form), then the local API credentials the provisioner
+    (WireGuard) and the exposure (HAProxy) call the firewall with.
+-->
+<form>
+    <field>
+        <type>header</type>
+        <label>Access lifecycle</label>
+    </field>
+    <field>
+        <id>paart.settings.rotationGraceDays</id>
+        <label>Rotation grace (days)</label>
+        <type>text</type>
+        <help>How long a device may keep using its old key after a rotation is requested. Expiry raises an alert — it never cuts access.</help>
+    </field>
+    <field>
+        <id>paart.settings.ipQuarantineDays</id>
+        <label>IP quarantine (days)</label>
+        <type>text</type>
+        <help>How long a released address stays unallocatable after a revocation. 0 disables the quarantine.</help>
+    </field>
+    <field>
+        <id>paart.settings.maxDevicesPerUser</id>
+        <label>Device limit per user</label>
+        <type>text</type>
+        <help>Maximum non-revoked devices per user, enforced at enrollment. 0 means unlimited.</help>
+    </field>
+    <field>
+        <id>paart.settings.auditRetentionMonths</id>
+        <label>Audit retention (months)</label>
+        <type>text</type>
+        <help>Retention horizon for audit entries. Entries older than this are purged by the periodic maintenance job (every 15 minutes; the purge records itself in the journal). Keeping less than 12 months is discouraged: a revocation should stay traceable months later.</help>
+    </field>
+    <field>
+        <type>header</type>
+        <label>Site</label>
+    </field>
+    <field>
+        <id>paart.settings.siteLabel</id>
+        <label>Site name</label>
+        <type>text</type>
+        <help>Name shown by the client apps for this site (e.g. the company name). Empty uses this firewall's hostname.</help>
+    </field>
+    <field>
+        <id>paart.settings.controlPlanePinSha256</id>
+        <label>Control plane pin</label>
+        <type>text</type>
+        <help>SPKI SHA-256 pin (base64, 44 characters) of the certificate this web GUI presents to enrolled devices, which reach it through their tunnel. This is not the enrollment host certificate below — devices refuse the control plane unless this pin is set. Compute it with: openssl x509 -in cert.pem -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64</help>
+    </field>
+    <field>
+        <id>paart.settings.siteKey</id>
+        <label>Site key</label>
+        <type>text</type>
+        <help>Optional. Stored here and served to the client apps in the bundle each managed device receives, so nobody has to retype it. This plugin never reads, parses or validates this value — it carries it, and the client apps alone decide what it means. Leave empty if you have none: the apps work without one.</help>
+    </field>
+    <field>
+        <type>header</type>
+        <label>Enrollment links</label>
+    </field>
+    <field>
+        <id>paart.settings.enrollHost</id>
+        <label>Enrollment host</label>
+        <type>text</type>
+        <help>Public host (host or host:port) devices reach to enroll; printed into every enrollment link and QR code. Token issuance refuses until this is set.</help>
+    </field>
+    <field>
+        <id>paart.settings.enrollPinSha256</id>
+        <label>Certificate pin (optional)</label>
+        <type>text</type>
+        <help>SPKI SHA-256 pin (base64, 44 characters) of the enrollment host certificate. Only needed when the certificate is not publicly verifiable (internal CA, self-signed).</help>
+    </field>
+    <field>
+        <type>header</type>
+        <label>Public exposure</label>
+    </field>
+    <field>
+        <id>paart.settings.exposureBind</id>
+        <label>Listen on</label>
+        <type>text</type>
+        <help>Address and port the public enrollment endpoint listens on when the exposure is applied below (HAProxy frontend). 0.0.0.0:443 means every IPv4 address on the HTTPS port; the web GUI must not listen on that port.</help>
+    </field>
+    <field>
+        <id>paart.settings.exposureCertificate</id>
+        <label>Certificate</label>
+        <type>dropdown</type>
+        <help>Server certificate the public endpoint presents (System > Trust > Certificates). Use one devices can verify — a public CA or ACME — or pin it in Enrollment links above.</help>
+    </field>
+    <field>
+        <type>header</type>
+        <label>Local API access</label>
+    </field>
+    <field>
+        <id>paart.settings.wgApiUrl</id>
+        <label>Local API URL</label>
+        <type>text</type>
+        <advanced>true</advanced>
+        <help>The firewall's own API endpoint used to manage WireGuard peers and, when the exposure is applied, the HAProxy objects. Leave the default unless this firewall's web GUI listens elsewhere.</help>
+    </field>
+    <field>
+        <id>paart.settings.wgApiKey</id>
+        <label>API key</label>
+        <type>text</type>
+        <help>Key of a local API user allowed to manage WireGuard — and HAProxy, if the public exposure is used. The plugin makes no other call and never leaves this firewall.</help>
+    </field>
+    <field>
+        <id>paart.settings.wgApiSecret</id>
+        <label>API secret</label>
+        <type>password</type>
+        <help>Secret of the API user above.</help>
+    </field>
+    <field>
+        <id>paart.settings.wgApiVerifyTls</id>
+        <label>Verify TLS certificate</label>
+        <type>checkbox</type>
+        <advanced>true</advanced>
+        <help>Verify the certificate on the local API call. Off by default: the loopback call presents this firewall's own (usually self-signed) certificate.</help>
+    </field>
+</form>

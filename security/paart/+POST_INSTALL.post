@@ -1,0 +1,27 @@
+# Bring the store schema up to date at install time (M02/M10), so the
+# first page load is fast and any refusal is visible NOW rather than as a
+# surprise on someone's first request.
+#
+# ASCII ONLY. pkg stores these lines in the +MANIFEST with every non-ASCII
+# byte percent-encoded, and runs them from there: an em dash written here
+# reaches the administrator's screen as %e2%80%94. Session 59 shipped that
+# defect and caught it only by building the package and reading the manifest.
+# The source file is intact on disk either way, so no review of it can show
+# the problem, which is why the constraint is written here rather than
+# assumed.
+#
+# The script is called directly rather than through "configctl paart
+# bootstrap": at this point in the install, configd has not necessarily
+# reloaded actions_paart.conf yet, and the script is the same code either
+# way. It is idempotent, so a later manual configctl call is still safe.
+#
+# A failure here must NOT abort the installation. The two ways this can
+# fail, a store newer than the code (a downgraded package, refused on
+# purpose) and an unwritable data directory, leave a plugin that is
+# installed and inert, which an administrator can look at. A half-installed
+# package would be worse. The reason is on stderr and in syslog under the
+# paart program name either way.
+if [ -x /usr/local/opnsense/scripts/OPNsense/Paart/bootstrap.php ]; then
+	/usr/local/opnsense/scripts/OPNsense/Paart/bootstrap.php || \
+	    echo "paart: the store could not be prepared; see /var/log/paart/. The plugin is installed but will refuse to serve until this is resolved."
+fi

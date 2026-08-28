@@ -1,0 +1,23 @@
+# Uninstalling a management tool must not cut a company's VPN.
+#
+# ASCII ONLY. pkg stores these lines in the +MANIFEST with every non-ASCII
+# byte percent-encoded, and runs them from there: an em dash written here
+# reaches the administrator's screen as %e2%80%94. Session 59 shipped that
+# defect and caught it only by building the package and reading the manifest.
+# The source file is intact on disk either way, so no review of it can show
+# the problem, which is why the constraint is written here rather than
+# assumed.
+#
+# So this script removes NOTHING: peers stay in place on the WireGuard
+# instances, every tunnel keeps working, and the store under /var/db/paart
+# is left untouched. Reinstalling the package finds its data again.
+#
+# That is the "keep" behaviour of spec 10, and it is the only one a package
+# script may perform, because pkg runs without a terminal: there is nobody
+# to ask here, and a destructive default that cannot be questioned is
+# exactly what forbidden rule #4 exists to prevent. Removing the managed
+# peers and the store is a deliberate act, taken in the plugin's own
+# interface while it is still installed and can still name what it is about
+# to delete.
+echo "paart: uninstalling. Managed peers, tunnels and the store under /var/db/paart are LEFT IN PLACE."
+echo "paart: to remove them, use the plugin's own removal action BEFORE uninstalling; this script never deletes an access."

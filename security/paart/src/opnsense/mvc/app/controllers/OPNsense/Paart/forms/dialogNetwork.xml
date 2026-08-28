@@ -1,0 +1,105 @@
+<!--
+    Copyright (C) 2026 Lux-World PC SARL
+
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are met:
+
+    1. Redistributions of source code must retain the above copyright notice,
+       this list of conditions and the following disclaimer.
+
+    2. Redistributions in binary form must reproduce the above copyright
+       notice, this list of conditions and the following disclaimer in the
+       documentation and/or other materials provided with the distribution.
+
+    THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+    INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
+    AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+    AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+    OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+    POSSIBILITY OF SUCH DAMAGE.
+-->
+
+<!--
+    Declared-network create/edit dialog (M08 Networks screen). Field ids
+    are dialog-local ("network.<field>") and map onto one
+    networks.network model node; Api\NetworksController mirrors the saved
+    declaration into the store (Q13). The plugin attaches to existing
+    WireGuard instances only (D7) — nothing here creates one.
+-->
+<form>
+    <field>
+        <id>network.enabled</id>
+        <label>Enabled</label>
+        <type>checkbox</type>
+    </field>
+    <field>
+        <id>network.wgInstanceRef</id>
+        <label>WireGuard instance</label>
+        <type>dropdown</type>
+        <help>The existing instance this declaration attaches to. The plugin never creates instances and never touches undeclared ones.</help>
+    </field>
+    <field>
+        <id>network.label</id>
+        <label>Label</label>
+        <type>text</type>
+        <help>Business name your users will see, e.g. "Office".</help>
+    </field>
+    <field>
+        <id>network.endpoint</id>
+        <label>Public endpoint</label>
+        <type>text</type>
+        <help>host:port published to devices, e.g. vpn.example.com:51820.</help>
+    </field>
+    <field>
+        <id>network.ipRangeCidr</id>
+        <label>Managed range</label>
+        <type>text</type>
+        <help>The address range this plugin is allowed to manage on the instance, contained in a single /24 (e.g. 10.7.0.0/24). Peers outside it are never touched.</help>
+    </field>
+    <field>
+        <id>network.poolStartOctet</id>
+        <label>Pool start octet</label>
+        <type>text</type>
+        <help>First host octet handed out to devices (e.g. 10 for .10).</help>
+    </field>
+    <field>
+        <id>network.poolEndOctet</id>
+        <label>Pool end octet</label>
+        <type>text</type>
+        <help>Last host octet handed out to devices (e.g. 199 for .199).</help>
+    </field>
+    <field>
+        <id>network.dnsServers</id>
+        <label>DNS servers</label>
+        <type>text</type>
+        <advanced>true</advanced>
+        <help>Comma-separated DNS servers pushed to devices.</help>
+    </field>
+    <field>
+        <id>network.matchDomains</id>
+        <label>Search domains</label>
+        <type>text</type>
+        <advanced>true</advanced>
+        <help>Comma-separated split-DNS domains pushed to devices.</help>
+    </field>
+    <field>
+        <id>network.allowFullTunnel</id>
+        <label>Allow full tunnel</label>
+        <type>checkbox</type>
+        <advanced>true</advanced>
+        <help>Let devices route all their traffic through this network.</help>
+    </field>
+    <field>
+        <id>network.allowSubnetToggle</id>
+        <label>Allow subnet toggle</label>
+        <type>checkbox</type>
+        <advanced>true</advanced>
+        <help>Let device owners enable or disable labeled subnets themselves. The subnets are declared with the row's Subnets button, once the network is saved.</help>
+    </field>
+</form>
